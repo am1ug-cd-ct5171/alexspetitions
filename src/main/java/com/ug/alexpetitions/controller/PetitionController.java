@@ -21,22 +21,27 @@ public class PetitionController {
     static final String REDIRECT_PETITIONS_VIEW = "redirect:/petitions/view";
     static final String REDIRECT_PETITIONS_CREATE = "redirect:/petitions/create";
     static final String VIEW_PETITIONS = "view-petitions";
-    static final String SEARCH_RESULTS = "search-results";
-    static final String PETITION_DETAIL = "petition-detail";
+    public static final String SEARCH_RESULTS = "search-results";
+    public static final String PETITION_DETAIL = "petition-detail";
+    public static final String HOME_MAPPING = "/";
+    public static final String CREATE_MAPPING = "/petitions/create";
+    public static final String VIEW_MAPPING = "/petitions/view";
+    public static final String SEARCH_FORM_MAPPING = "/petitions/search";
+    public static final String SEARCH_RESULTS_MAPPING = "/petitions/search-results";
 
     private final PetitionService petitionService;
 
-    @GetMapping("/")
+    @GetMapping(HOME_MAPPING)
     public String home() {
         return "home";
     }
 
-    @GetMapping("/petitions/create")
+    @GetMapping(CREATE_MAPPING)
     public String showCreateForm() {
         return "create-petition";
     }
 
-    @PostMapping("/petitions/create")
+    @PostMapping(CREATE_MAPPING)
     public String createPetition(
             @RequestParam("title") String title,
             @RequestParam("description") String description,
@@ -58,19 +63,19 @@ public class PetitionController {
         return REDIRECT_PETITIONS_VIEW;
     }
 
-    @GetMapping("/petitions/view")
+    @GetMapping(VIEW_MAPPING)
     public String viewAllPetitions(Model model) {
         List<Petition> petitions = petitionService.getAllPetitions();
         model.addAttribute("petitions", petitions);
         return VIEW_PETITIONS;
     }
 
-    @GetMapping("/petitions/search")
+    @GetMapping(SEARCH_FORM_MAPPING)
     public String showSearchForm() {
         return "search-petition";
     }
 
-    @GetMapping("/petitions/search-results")
+    @GetMapping(SEARCH_RESULTS_MAPPING)
     public String searchPetitions(
             @RequestParam(value = "query", required = false) String query,
             Model model) {
