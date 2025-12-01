@@ -1,0 +1,31 @@
+version: '3.8'
+
+services:
+  petitions-app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: petitions-app:latest
+    container_name: petitions-app
+    ports:
+      - "8080:8080"
+    environment:
+      - SPRING_PROFILES_ACTIVE=prod
+      - CATALINA_OPTS=-Xms512m -Xmx1024m
+      - JAVA_OPTS=-Djava.security.egd=file:/dev/./urandom
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+    restart: unless-stopped
+    networks:
+      - petitions-network
+    labels:
+      - "com.petitions.description=Petitions System Application"
+      - "com.petitions.version=1.0.0"
+
+networks:
+  petitions-network:
+    driver: bridge
