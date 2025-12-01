@@ -13,6 +13,7 @@ pipeline{
                                 echo "Last commit was a version bump. Skipping the rest of the pipeline."
                                 currentBuild.result = 'SUCCESS'
                                 env.IS_JENKINS_COMMIT = 'true'
+                                error("Skipping pipeline due to version bump commit")
                             }
                         }
                     }
