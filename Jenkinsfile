@@ -12,13 +12,15 @@ pipeline{
                             if (lastCommitMsg.startsWith("Increment version to")) {
                                 echo "Last commit was a version bump. Skipping the rest of the pipeline."
                                 currentBuild.result = 'SUCCESS'
-                                // Exit the pipeline
-                                error("Skipping pipeline due to version bump commit")
+                                env.IS_JENKINS_COMMIT = 'true'
                             }
                         }
                     }
         }
         stage('Increment Version') {
+                    when {
+                        expression { env.IS_JENKINS_COMMIT != 'true' }
+                    }
                     steps {
                         script {
                             def version = sh(
@@ -57,11 +59,17 @@ pipeline{
                     }
                 }
         stage('Build'){
+            when {
+                expression { env.IS_JENKINS_COMMIT != 'true' }
+            }
             steps{
                 sh 'mvn clean package'
             }
         }
         stage('Code Coverage') {
+                    when {
+                         expression { env.IS_JENKINS_COMMIT != 'true' }
+                    }
                     steps {
                         sh 'mvn jacoco:report'
                         archiveArtifacts artifacts: 'target/site/jacoco/index.html', allowEmptyArchive: true
@@ -71,6 +79,10 @@ pipeline{
     post{
             success{
                 script {
+                    if (env.IS_JENKINS_COMMIT == 'true') {
+                        echo "Pipeline was skipped due to version bump commit. No further actions taken."
+                        return
+                    }
                     echo "Pipeline succeeded. Committing version ${env.NEW_VERSION}"
 
                     withCredentials([string(credentialsId: 'github-token', variable: 'GITHUB_TOKEN')]) {
