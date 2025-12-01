@@ -104,6 +104,9 @@ pipeline{
                     echo "Successfully pushed version ${env.NEW_VERSION}"
 
                     archiveArtifacts allowEmptyArchive: true, artifacts: '**/alexpetitions-*.war'
+                    archiveArtifacts artifacts: 'target/Dockerfile', allowEmptyArchive: true
+                    archiveArtifacts artifacts: 'target/docker-compose.yml', allowEmptyArchive: true
+                    archiveArtifacts artifacts: 'target/.dockerignore', allowEmptyArchive: true
                 }
             }
             failure{
