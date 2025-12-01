@@ -1,0 +1,130 @@
+pipeline {
+    agent any
+
+    parameters {
+        string(
+            name: 'EC2_HOST', 
+            defaultValue: 'ubuntu@ec2-54-242-222-10.compute-1.amazonaws.com', 
+            description: 'User@IP of target EC2 instance'
+        )
+        string(
+            name: 'UPSTREAM_JOB_NAME', 
+            defaultValue: 'MVN Petitions pipeline', 
+            description: 'Name of the upstream build job'
+        )
+        string(
+            name: 'SSH_CREDENTIAL_ID', 
+            defaultValue: 'Petitions-app', 
+            description: 'Jenkins SSH credential ID'
+        )
+    }
+
+    environment {
+        REMOTE_DEPLOY_DIR = '/home/ubuntu/app'
+        DEPLOYMENT_TIMESTAMP = sh(script: 'date +%Y%m%d_%H%M%S', returnStdout: true).trim()
+    }
+
+    stages {
+        stage('Fetch Artifact') {
+            steps {
+                script {
+                    echo "Starting artifact retrieval from job: ${params.UPSTREAM_JOB_NAME}. Using 'lastSuccessful' build selector for reliability."
+                    
+                    copyArtifacts(
+                        projectName: params.UPSTREAM_JOB_NAME,
+                        selector: lastSuccessful(), // Uses the last build marked as Successful
+                        filter: 'target/*.war, target/docker-compose.yml, target/Dockerfile, target/.dockerignore' 
+                    )
+                    
+                    def warNameOutput = sh(
+                        script: "find . -name '*.war' -print -quit | xargs basename",
+                        returnStdout: true,
+                        quiet: true
+                    )
+                    
+                    env.WAR_NAME = (warNameOutput ?: '').trim()
+                    
+                    if (env.WAR_NAME.isEmpty()) {
+                        error("Deployment halted: Required WAR artifact (*.war) was not found after copying from the latest successful build of the upstream job: ${params.UPSTREAM_JOB_NAME}. The upstream job must archive the WAR file.")
+                    }
+                    
+                    echo "Found and copied WAR artifact: ${env.WAR_NAME}"
+                }
+            }
+        }
+        
+        stage('Manual Approval') {
+            steps {
+                timeout(time: 3, unit: 'DAYS') {
+                    input(
+                        id: 'deploy-approval',
+                        message: "Approve deployment of version ${env.WAR_NAME} (from latest successful build) to EC2 host ${params.EC2_HOST}?",
+                        ok: 'Deploy Now'
+                    )
+                }
+            }
+        }
+        
+        stage('Deploy to EC2') {
+            steps {
+                echo "Starting deployment of ${env.WAR_NAME} to ${params.EC2_HOST}"
+                
+                // keyFile variable holds the temporary path to the key file provided by the Secret File credential.
+                withCredentials([file(credentialsId: params.SSH_CREDENTIAL_ID, variable: 'keyFile')]) {
+                    
+                    script {
+                        sh """
+                            set -xe
+                            
+                            echo 'Setting secure permissions on private key file...'
+                            chmod 600 \"${keyFile}\"
+
+                            echo 'Creating remote deployment directory...'
+                            ssh -o StrictHostKeyChecking=no -i "${keyFile}" ${params.EC2_HOST} "rm -rf ${REMOTE_DEPLOY_DIR}/target/*"
+                            ssh -o StrictHostKeyChecking=no -i "${keyFile}" ${params.EC2_HOST} "rm -rf ${REMOTE_DEPLOY_DIR}/*"
+                            ssh -o StrictHostKeyChecking=no -i \"${keyFile}\" ${params.EC2_HOST} 'mkdir -p ${REMOTE_DEPLOY_DIR}'
+                            ssh -o StrictHostKeyChecking=no -i \"${keyFile}\" ${params.EC2_HOST} 'mkdir -p ${REMOTE_DEPLOY_DIR}/target'
+
+                            echo 'Finding local path of the WAR artifact...'
+                            WAR_PATH=\$(find . -name "${env.WAR_NAME}" -print -quit)
+                            
+                            echo "Copying WAR file (\$WAR_PATH) to remote host..."
+                            scp -o StrictHostKeyChecking=no -i \"${keyFile}\" \$WAR_PATH ${params.EC2_HOST}:${REMOTE_DEPLOY_DIR}/target/${env.WAR_NAME}
+                            
+                            echo 'Copying Docker configuration files to remote host...'
+                            scp -o StrictHostKeyChecking=no -i \"${keyFile}\" ./target/Dockerfile ${params.EC2_HOST}:${REMOTE_DEPLOY_DIR}/
+                            scp -o StrictHostKeyChecking=no -i \"${keyFile}\" ./target/docker-compose.yml ${params.EC2_HOST}:${REMOTE_DEPLOY_DIR}/
+                            scp -o StrictHostKeyChecking=no -i \"${keyFile}\" ./target/.dockerignore ${params.EC2_HOST}:${REMOTE_DEPLOY_DIR}/
+                            
+                            echo 'Initiating remote Docker Compose execution...'
+                            ssh -o StrictHostKeyChecking=no -i \"${keyFile}\" ${params.EC2_HOST} "
+                                set -xe
+                                cd ${REMOTE_DEPLOY_DIR}
+                                
+                                echo 'Stopping existing containers...'
+                                docker compose down -v
+                                
+                                echo 'Building and starting new service...'
+                                docker compose up -d --build
+                                
+                                echo 'Deployment complete on remote host!'
+                            "
+                        """
+                    }
+                }
+            }
+        }
+    }
+    
+    post {
+        always {
+            cleanWs()
+        }
+        success {
+            echo "Deployment Pipeline succeeded. Version ${env.WAR_NAME} is now live."
+        }
+        failure {
+            echo "Deployment failed! Check logs for errors."
+        }
+    }
+}
