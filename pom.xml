@@ -10,7 +10,7 @@
     </parent>
     <groupId>com.ug</groupId>
     <artifactId>alexpetitions</artifactId>
-    <version>0.6.0</version>
+    <version>0.7.0</version>
     <packaging>war</packaging>
     <name>PETITIONS</name>
     <description>Demo petitions project</description>
