@@ -92,7 +92,7 @@ pipeline{
                             git config user.name "Jenkins"
 
                             git add pom.xml
-                            git commit -m "Increment version to ${env.NEW_VERSION} [skip ci]" || echo "No changes to commit"
+                            git commit -m "Increment version to ${env.NEW_VERSION}" || echo "No changes to commit"
 
                             # Extract repository URL without protocol
                             REPO_URL=\$(echo "${scm.userRemoteConfigs[0].url}" | sed 's|https://||' | sed 's|http://||')
